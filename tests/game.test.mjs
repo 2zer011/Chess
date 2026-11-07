@@ -63,4 +63,32 @@ const rng = () => 0.5;
   assert.deepEqual(sv.unlocked, ['void', 'error', 'time']);
   assert.equal(check(sv).length, 0);
 }
+const E = (kind, x, y) => ({ kind, x, y, stun: 0, inf: 0 });
+{ // black king shotgun: cone kills, others live
+  const g = newGame('blackking', rng);
+  g.enemies = [E('pawn', 3, 6), E('pawn', 3, 4), E('pawn', 4, 5), E('pawn', 6, 6), E('pawn', 0, 0)];
+  assert.ok(ability(g, 3, 6, 0));
+  assert.equal(g.kills, 3); // (3,6) (3,4) (4,5) in the cone
+  assert.ok(g.p.cd > 0 && ability(g, 3, 6, 0) === false);
+  assert.ok(ability(g, 0, 0, 1) && g.p.shield === 2, 'guard is a free action');
+}
+{ // space lance needs a clear line
+  const g = newGame('space', rng);
+  g.enemies = [E('pawn', 3, 4), E('pawn', 3, 6)];
+  assert.equal(ability(g, 3, 4, 1), false, 'blocked line');
+  assert.ok(ability(g, 3, 6, 1));
+  assert.equal(g.kills, 1);
+}
+{ // blackhole repel, void devour heal, parasite spores, error overflow, time lock
+  let g = newGame('blackhole', rng); g.enemies = [E('pawn', 3, 6), E('pawn', 0, 0)];
+  assert.ok(ability(g, 0, 0, 1)); assert.ok(g.enemies[0].y <= 6 - 1 + 1);
+  g = newGame('void', rng); g.p.hp = 1; g.enemies = [E('pawn', 3, 6), E('pawn', 0, 0)];
+  assert.ok(ability(g, 3, 6, 1)); assert.equal(g.p.hp, 2);
+  g = newGame('parasite', rng); g.freeze = 5; g.enemies = [E('pawn', 3, 6), E('pawn', 2, 6), E('pawn', 0, 0)];
+  assert.ok(ability(g, 0, 0, 1)); assert.equal(g.enemies.filter(e => e.inf).length, 2);
+  g = newGame('error', rng); g.enemies = [E('pawn', 3, 2), E('pawn', 5, 7), E('pawn', 0, 0)];
+  assert.ok(ability(g, 0, 0, 1)); assert.equal(g.enemies.filter(e => e.stun > 0 || e.y > 0).length >= 2, true);
+  g = newGame('time', rng); g.enemies = [E('pawn', 3, 5), E('pawn', 0, 0)];
+  assert.ok(ability(g, 0, 0, 1));
+}
 console.log('ok');

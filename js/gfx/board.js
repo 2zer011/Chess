@@ -50,9 +50,21 @@ export const drawBoard = c => c.drawImage(BOARD, 0, OY);
 export const drawShadow = (c, x, y) => c.drawImage(SHADOW, x + 4, y + 16);
 export const drawThreat = (c, tx, ty) => c.drawImage(THREAT, BX + tx * TILE, BY + ty * TILE);
 
-export function moveDot(c, tx, ty) {
+export function moveDot(c, tx, ty, k = '5') {
   const x = BX + tx * TILE + 9, y = BY + ty * TILE + 9;
-  rect(c, x + 1, y + 1, 3, 3, '0'); rect(c, x + 1, y, 1, 3, '5'); rect(c, x, y + 1, 3, 1, '5');
+  rect(c, x + 1, y + 1, 3, 3, '0'); rect(c, x + 1, y, 1, 3, k); rect(c, x, y + 1, 3, 1, k);
+}
+
+// Accent glow under the active piece (two cached dither phases, pulsing).
+const GLOW = {};
+export function drawGlow(c, tx, ty, A, t) {
+  const ph = ((t * 2.5) | 0) % 2, key = A.m + ph;
+  if (!GLOW[key]) {
+    const cv = GLOW[key] = mk(TILE, TILE), g = cv.getContext('2d');
+    g.fillStyle = A.d;
+    for (let y = 1; y < TILE - 1; y++) for (let x = 1; x < TILE - 1; x++) if (BAYER[(y & 3) * 4 + (x & 3)] < (ph ? 7 : 5)) g.fillRect(x, y, 1, 1);
+  }
+  c.drawImage(GLOW[key], BX + tx * TILE, BY + ty * TILE);
 }
 
 export function bracket(c, tx, ty, k, inset = 1) {

@@ -1,6 +1,6 @@
-// Hand-built pixel grids. '.' = transparent, '0'-'5','r','R' = palette, 'i' = glass interior.
+// Hand-built pixel grids. '.' transparent, '0'-'5','r','R' palette, 'i' glass interior,
+// 'a' 'b' 'c' = the piece's accent ramp (dark / mid / light).
 // mirror:true => rows describe the left half (8 cols) and are reflected to 16.
-// Enemies use pale shades (4/5); player characters use dark bodies with bright rims so they read apart.
 export const SPRITES = {
   pawn: { mirror: true, rows: [
     '........', '........', '......44', '.....554', '.....554', '.....544', '.....544', '....3444',
@@ -20,17 +20,22 @@ export const SPRITES = {
     '..4555..3333344.', '...455.43333344.', '....45555333344.', '...455555533344.', '..4555555553334.',
     '..2222222222222.'] },
 
-  // --- player characters ---
-  void: { mirror: true, rows: [   // hooded wraith, hollow face, ragged hem
-    '........', '......55', '.....522', '....5222', '...52222', '..522000', '..522050', '..522000',
-    '..522200', '..523222', '.5232322', '.5232322', '5223232', '5222.222', '52.2.2.2', '5...2...'].map(r => r.padEnd(8, '.')) },
-  error: { mirror: true, rows: [  // cracked monitor on legs, X eyes, antenna
-    '.......5', '.......3', '.4444444', '.4111111', '.41R1R11', '.411R111', '.41R1R11', '.4111111',
-    '.4151515', '.4444444', '.3333333', '....22..', '....22..', '....22..', '...3333.', '........'] },
-  time: { mirror: true, rows: [   // hourglass; sand is drawn procedurally into the 'i' cells
-    '........', '........', '.5555555', '.3333333', '.3.4iiii', '.3..4iii', '.3...4ii', '.3....4i',
-    '.3....4i', '.3...4ii', '.3..4iii', '.3.4iiii', '.5555555', '.3333333', '........', '........'] },
-  parasite: { mirror: true, rows: [ // tick body; legs are procedural
-    '........', '........', '......33', '.....333', '.....33R', '.....33R', '....2333', '...23444',
-    '..234444', '..234544', '..234544', '..234444', '...23444', '....2333', '.....222', '........'] },
+  // ---- special pieces (accent colored) ----
+  void: { mirror: true, rows: [   // hooded wraith: violet rim light, glowing eyes, wisp hem
+    '........', '......bb', '.....b22', '....b222', '...b2222', '..b22000', '..b220c0', '..b22000',
+    '..b22200', '..b22222', '.b2222a2', '.b222a22', 'b222a222', 'b222.2a2', 'b2.2.2.b', 'b...2..b'] },
+  error: { mirror: true, rows: [  // cracked monitor, magenta X eyes + glitch teeth
+    '.......c', '.......3', '.4444444', '.3000000', '.30c0c00', '.300c000', '.30c0c00', '.3000000',
+    '.30b0b0b', '.3333333', '.2222222', '....22..', '....22..', '....22..', '...3333.', '........'] },
+  time: { mirror: true, rows: [   // gold hourglass; sand drawn in code
+    '........', '........', '.ccccccc', '.bbbbbbb', '.b.4iiii', '.b..4iii', '.b...4ii', '.b....4i',
+    '.b....4i', '.b...4ii', '.b..4iii', '.b.4iiii', '.ccccccc', '.bbbbbbb', '........', '........'] },
+  parasite: { mirror: true, rows: [ // toxic tick; legs drawn in code
+    '........', '........', '......bb', '.....bbb', '.....bbR', '.....bbR', '....abbb', '...abbbb',
+    '..abbcbb', '..abbbbb', '..abcbbb', '..abbbbb', '...abbbb', '....abbb', '.....aaa', '........'] },
+  blackking: { rows: [            // armored king, red trim, shotgun to the right
+    '.......c........', '......ccc.......', '.......c........', '....bcbcbcb.....', '....bbbbbbb.....',
+    '....2222222.....', '....2000c22.....', '....2222222.....', '...2bb222bb2....', '..22b22222b22...',
+    '.2b1222221b24444', '.2b12222221b3333', '..2bb22222bb2...', '...22b222b22....', '....22...22.....',
+    '....33...33.....'] },
 };

@@ -15,8 +15,8 @@ export default {
     // diorama strip: all six characters on stone
     for (let i = 0; i < 8; i++) rect(c, 8 + i * 20, 100, 20, 20, i % 2 ? '2' : '3');
     CHARS.forEach((id, i) => {
-      const x = 14 + i * 24;
-      if (app.sv.unlocked.includes(id)) drawChar(c, id, x - 6 + 4, 100, t + i, {}); else drawSilhouette(c, id, x - 2, 100);
+      const x = 18 + i * 20;
+      if (app.sv.unlocked.includes(id)) drawChar(c, id, x, 100, t + i, {}); else drawSilhouette(c, id, x, 100);
     });
     const bx = 28, bw = 120;
     if (btn(c, 'PLAY', bx, 134, bw, 22)) app.go('characters', { mode: 'pick' });

@@ -45,10 +45,10 @@ function play(piece, seed, dt, maxActs = 60) {
   let trace = '';
   for (let n = 0; n < maxActs && g.phase !== 'over'; n++) {
     if (g.phase === 'buff') { choose(g, 0); settle(); continue; }
-    const def = PIECES[piece].ability;
-    if (g.p.cd === 0 && rng() < 0.4) {
-      const t = abilityTargets(g);
-      if (def.target === 'none') ability(g); else if (t.length) { const s = t[Math.floor(rng() * t.length)]; ability(g, s.x, s.y); } else continue;
+    const slot = rng() < 0.5 ? 0 : 1, def = PIECES[piece].abilities[slot];
+    if ((slot ? g.p.cd2 : g.p.cd) === 0 && rng() < 0.45) {
+      const t = abilityTargets(g, slot);
+      if (def.target === 'none') ability(g, 0, 0, slot); else if (t.length) { const s = t[Math.floor(rng() * t.length)]; ability(g, s.x, s.y, slot); } else continue;
     } else {
       const m = moves(g); const s = m[Math.floor(rng() * m.length)]; move(g, s.x, s.y);
     }
@@ -58,8 +58,8 @@ function play(piece, seed, dt, maxActs = 60) {
   return { trace, log: D.log.join(), D, g };
 }
 
-for (const piece of ['void', 'error', 'time', 'space', 'blackhole', 'parasite']) {
-  for (const seed of [1, 2, 3]) play(piece, seed, 1 / 60);
+for (const piece of ['void', 'error', 'time', 'space', 'blackhole', 'parasite', 'blackking']) {
+  for (const seed of [1, 2, 3, 4, 5]) play(piece, seed, 1 / 60);
 }
 
 { // frame-rate independence: same game, 144 / 60 / 20 fps

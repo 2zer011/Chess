@@ -5,6 +5,7 @@ export const ACH = [
   { id: 'abil20', name: 'SORCERER', desc: 'USE ABILITIES 20 TIMES (TOTAL)', val: s => s.abil, goal: 20, unlock: 'space' },
   { id: 'kills80', name: 'BUTCHER', desc: 'KILL 80 ENEMIES (TOTAL)', val: s => s.kills, goal: 80, unlock: 'blackhole' },
   { id: 'wave8', name: 'IMMORTAL', desc: 'REACH WAVE 8', val: s => s.best, goal: 8, unlock: 'parasite' },
+  { id: 'kills150', name: 'KING SLAYER', desc: 'KILL 150 ENEMIES (TOTAL)', val: s => s.kills, goal: 150, unlock: 'blackking' },
 ];
 
 // Marks newly finished achievements on the save, returns them.

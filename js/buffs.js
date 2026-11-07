@@ -5,7 +5,7 @@ const B = (name, desc, apply) => ({ name, desc, apply });
 export const BUFFS = {
   // common
   vit: B('VITALITY', '+1 MAX HP AND HEAL 1.', g => { g.p.maxHp++; heal(g, 1); }),
-  haste: B('HASTE', 'ABILITY COOLDOWN -1.', g => { g.p.cdMax = Math.max(1, g.p.cdMax - 1); }),
+  haste: B('HASTE', 'ABILITY COOLDOWNS -1.', g => { g.p.cdMax = Math.max(1, g.p.cdMax - 1); g.p.cdMax2 = Math.max(1, g.p.cdMax2 - 1); }),
   shield: B('SHIELD', '+1 SHIELD. BLOCKS ONE HIT.', g => { g.p.shield++; }),
   // void
   abyss: B('ABYSS', 'ERASE REACHES 1 TILE FARTHER.', g => { g.p.radius++; }),
@@ -35,6 +35,10 @@ export const BUFFS = {
     g.acc = g.acc || 0;
     g.hooks.kill.push(h => { if (++h.acc % 4 === 0) heal(h, 1); });
   }),
+  // black king
+  barrel: B('LONG BARREL', 'SHOTGUN REACHES 1 TILE FARTHER.', g => { g.p.shot++; }),
+  spread: B('WIDE SPREAD', 'SHOTGUN CONE GETS WIDER.', g => { g.p.cone = 0.5; }),
+  plate: B('PLATE ARMOR', '+1 MAX HP AND +1 SHIELD.', g => { g.p.maxHp++; heal(g, 1); g.p.shield++; }),
   // parasite
   virulent: B('VIRULENT', 'INFECTION KILLS 1 TURN FASTER.', g => { g.p.infT = Math.max(1, g.p.infT - 1); }),
   plague: B('PLAGUE', 'INFECTION SPREADS 1 TILE FARTHER.', g => { g.p.spread++; }),

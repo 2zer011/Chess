@@ -1,9 +1,10 @@
 // Sequencer: a queue of Steps, one active at a time; each Step is a list of timed phases.
 // Phase: { name, dur, enter?(step), tick?(p 0..1, dt, step), exit?(step) }. Time is delta-time based.
 import { Actor } from './actor.js';
+import { accOf } from '../art/palette.js';
 
 export class Director {
-  constructor(v, piece = 'void') { this.v = v; this.piece = piece; this.reset(); }
+  constructor(v, piece = 'void') { this.v = v; this.piece = piece; this.acc = accOf(piece); this.reset(); }
 
   reset() {
     if (this.cur) for (const a of this.cur.actors) a.release(this.cur);

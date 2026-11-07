@@ -12,7 +12,7 @@ export function newGame(id, rng = Math.random) {
   const g = {
     rng, piece: id, ctx: 'turn', wave: 0, kills: 0, abil: 0, freeze: 0, phase: 'play', // play | buff | over
     ev: [], enemies: [], choices: [], buffs: [], hooks: { kill: [], ability: [] },
-    p: { x: 3, y: N - 1, hp: d.hp, maxHp: d.hp, kind: d.kind, range: d.range, cd: 0, cdMax: d.cd, shield: 0, host: null, ...d.stats },
+    p: { x: 3, y: N - 1, hp: d.hp, maxHp: d.hp, kind: d.kind, range: d.range, cd: 0, cdMax: d.abilities[0].cd, cd2: 0, cdMax2: d.abilities[1].cd, shield: 0, host: null, ...d.stats },
   };
   g.at = (x, y) => (g.p.x === x && g.p.y === y ? g.p : g.enemies.find(e => e.x === x && e.y === y));
   g.kill = e => kill(g, e);
@@ -43,30 +43,34 @@ export function move(g, x, y) {
   return true;
 }
 
-export function abilityTargets(g) {
-  const a = PIECES[g.piece].ability, out = [];
+export function abilityTargets(g, slot = 0) {
+  const a = PIECES[g.piece].abilities[slot], out = [];
   if (a.target === 'none') return out;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const e = g.at(x, y), d = cheb({ x, y }, g.p);
     if (!d || d > a.reach) continue;
-    if (a.target === 'enemy' ? e : (!e || g.p.capWarp)) out.push({ x, y });
+    let ok = a.target === 'enemy' ? !!e : a.target === 'dir' ? true : (!e || g.p.capWarp);
+    if (ok && a.valid) ok = a.valid(g, x, y, e);
+    if (ok) out.push({ x, y });
   }
   return out;
 }
 
-export function ability(g, x, y) {
-  const a = PIECES[g.piece].ability;
-  if (g.phase !== 'play' || g.p.cd > 0) return false;
-  if (a.target !== 'none' && !abilityTargets(g).some(s => s.x === x && s.y === y)) return false;
+export const cdOf = (g, slot) => (slot ? g.p.cd2 : g.p.cd);
+
+export function ability(g, x, y, slot = 0) {
+  const a = PIECES[g.piece].abilities[slot];
+  if (g.phase !== 'play' || cdOf(g, slot) > 0) return false;
+  if (a.target !== 'none' && !abilityTargets(g, slot).some(s => s.x === x && s.y === y)) return false;
   const fx = g.p.x, fy = g.p.y, before = g.enemies.map(e => [e, e.x, e.y]);
-  g.ev.push({ t: 'ability', fx, fy, x, y });
+  g.ev.push({ t: 'ability', slot, fx, fy, x, y });
   g.ctx = 'ability';
   a.run(g, x, y);
   g.ctx = 'turn';
   const moved = before.filter(([e, ex, ey]) => g.enemies.includes(e) && (e.x !== ex || e.y !== ey)).map(([e]) => ({ e, x: e.x, y: e.y }));
-  g.ev.push({ t: 'abilityEnd', moved, px: g.p.x, py: g.p.y });
+  g.ev.push({ t: 'abilityEnd', moved, px: g.p.x, py: g.p.y, hp: g.p.hp, maxHp: g.p.maxHp, shield: g.p.shield });
   g.abil++;
-  g.p.cd = g.p.cdMax + 1; // endTurn ticks it down once
+  if (slot) g.p.cd2 = g.p.cdMax2 + 1; else g.p.cd = g.p.cdMax + 1; // endTurn ticks it down once
   for (const h of g.hooks.ability) h(g);
   if (!a.free) endTurn(g);
   return true;
@@ -97,7 +101,7 @@ function endTurn(g) {
   tickInfection(g);
   if (!g.enemies.length) return clear(g);
   if (g.freeze > 0) { g.freeze--; g.ev.push({ t: 'frozen' }); } else enemyPhase(g);
-  g.p.cd = Math.max(0, g.p.cd - 1);
+  g.p.cd = Math.max(0, g.p.cd - 1); g.p.cd2 = Math.max(0, g.p.cd2 - 1);
   if (g.p.hp <= 0) { g.phase = 'over'; return; }
   if (!g.enemies.length) clear(g);
 }

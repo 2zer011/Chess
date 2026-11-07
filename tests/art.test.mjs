@@ -7,7 +7,7 @@ import { parseAscii } from '../js/gfx/pixel.js';
 import { CHARS } from '../js/gfx/sprites.js';
 import { PIECES } from '../js/pieces.js';
 
-const OK = /^[.0-5rRi]+$/;
+const OK = /^[.0-5rRiabc]+$/;
 for (const [k, d] of Object.entries(SPRITES)) {
   const g = parseAscii(d.rows, d.mirror);
   assert.equal(g.length, 16, `${k} should be 16 rows`);
@@ -20,7 +20,8 @@ for (const [k, g] of Object.entries(FONT_GLYPHS)) {
   g.forEach(r => assert.equal(r.length, g[0].length, `glyph ${k} ragged`));
 }
 assert.ok(textW('CHECKMATE', 3) <= 176, 'CHECKMATE banner must fit the screen');
-const PROCEDURAL = ['space', 'blackhole']; // drawn by code in gfx/sprites.js, no grid
+const PROCEDURAL = ['space', 'blackhole'];
+for (const [id, p] of Object.entries(PIECES)) assert.equal(p.abilities.length, 2, id + ' needs two abilities'); // drawn by code in gfx/sprites.js, no grid
 for (const id of CHARS) assert.ok(PIECES[id] && (SPRITES[id] || PROCEDURAL.includes(id)), `${id} needs a piece and art`);
 for (const id of ['pawn', 'knight', 'bishop', 'rook', 'queen']) assert.ok(SPRITES[id]);
 console.log('art ok');

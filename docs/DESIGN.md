@@ -46,3 +46,19 @@ Buff chung: Cường tráng (+máu), Thần tốc (hồi chiêu -1), Khiên.
 - Vua địch / boss, Hậu có chiêu.
 - Lưu giữa trận; cân bằng số liệu (chưa chơi thử nhiều).
 - Chiêu Time chưa có "tua lại", chỉ ngưng đọng.
+
+## v0.3 additions
+Every piece now has **two skills** (own cooldown each) and an **accent color** (violet, magenta, gold, cyan, orange, green, red).
+New piece: **BLACK KING** (unlock: kill 150 enemies total), king step, 4 HP.
+
+| Piece | Skill 1 | Skill 2 |
+|---|---|---|
+| Void | ERASE | DEVOUR: eat adjacent enemy, heal 1 |
+| Error | SWAP | OVERFLOW: stun enemies in your row + column |
+| Time | FREEZE (free) | TIME LOCK: stun enemies within 2 |
+| Space | WARP | LANCE: kill an enemy on a clear line, any range |
+| Black Hole | SINGULARITY | REPEL: shove enemies within 2 back by 2 |
+| Parasite | INFECT | SPORES: infect all adjacent enemies |
+| Black King | SHOTGUN: kill everything in a cone (3 tiles) | GUARD (free): +2 shields |
+
+Buffs for the Black King: LONG BARREL (+1 range), WIDE SPREAD (wider cone), PLATE ARMOR (+1 max HP, +1 shield).

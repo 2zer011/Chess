@@ -46,3 +46,9 @@ board -> threat/move markers -> ground FX (dust, rings) -> shadows -> afterimage
 ## Low-end Android
 Particle cap 220; automatic quality drop (half particles) when frames are slow; shadows, threat tiles, overlays and
 portrait backdrops are cached; pixel lists for enemy death are cached; no per-frame allocation in hot paths except scratch canvases reused.
+
+## v0.3 effects
+- Accent colors: every skill particle, ring, flash and trail uses the piece's ramp; a dither glow pulses under the active piece; idle embers rise from it.
+- Particles: color ramps over life (light -> mid -> dark), 2px spores, plus-shaped sparkles, smoke, embers, beams of fading sparkles.
+- Impact = flash + board dither tint (very light, 0.1s) + double ring + sparkles + limited shake + hit-stop.
+- Black King SHOTGUN: cock (lean/squash) -> recoil blast with pellet cone and smoke -> kills in the cone shatter.

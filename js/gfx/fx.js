@@ -1,30 +1,35 @@
 // Pixel particles (2 layers), rings, flashes, floating text, limited screen shake, hit-stop, ambient dust.
-import { W, H } from '../art/palette.js';
+import { W, H, BX, BY } from '../art/palette.js';
 import { rect, BAYER, mk } from './pixel.js';
+import { C } from '../art/palette.js';
 import { text } from '../art/font.js';
 
 export const fx = {
-  parts: [], floats: [], rings: [], flashes: [], motes: [],
+  parts: [], floats: [], rings: [], flashes: [], tints: [], motes: [],
   shakeAmp: 0, ox: 0, oy: 0, hit: 0, q: 1, on: { shake: true, ambient: true },
 };
 const CAP = 220; // particle budget for low-end phones
 
-export function reset() { fx.parts.length = 0; fx.floats.length = 0; fx.rings.length = 0; fx.flashes.length = 0; fx.shakeAmp = 0; fx.hit = 0; }
+export function reset() { fx.parts.length = 0; fx.floats.length = 0; fx.rings.length = 0; fx.flashes.length = 0; fx.tints.length = 0; fx.shakeAmp = 0; fx.hit = 0; }
 
 const add = p => { if (fx.parts.length < CAP) fx.parts.push(p); };
 // z: 0 = under sprites (dust, ground), 1 = over sprites
 export function burst(x, y, n, cols, o = {}) {
-  const { spd = 45, life = 0.5, g = 90, up = 0, z = 1 } = o;
+  const { spd = 45, life = 0.5, g = 90, up = 0, z = 1, ramp = false, sz = 1, plus = false } = o;
   n = Math.max(1, Math.round(n * fx.q));
   for (let i = 0; i < n; i++) {
     const a = Math.random() * 6.283, s = spd * (0.3 + Math.random() * 0.7), l = life * (0.6 + Math.random() * 0.6);
-    add({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - up, g, life: l, max: l, col: cols[i % cols.length], z });
+    add({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - up, g, life: l, max: l, col: ramp ? cols : cols[i % cols.length], z, sz, plus });
   }
 }
 export const spark = (x, y, vx, vy, col, life = 0.4, g = 0, z = 1) => add({ x, y, vx, vy, g, life, max: life, col, z });
 // particle that flies from (x,y) to (tx,ty) and lands exactly there (pixel gather)
 export const fly = (x, y, tx, ty, col, life) => add({ x, y, sx: x, sy: y, tx, ty, vx: 0, vy: 0, g: 0, life, max: life, col, z: 1 });
-export const ring = (x, y, r, life, col, z = 1) => fx.rings.push({ x, y, r, t: 0, life, col, z });
+export const ring = (x, y, r, life, col, z = 1, col2 = '#7f90c0') => fx.rings.push({ x, y, r, t: 0, life, col, col2, z });
+// ember: rises and cools through the accent ramp; smoke: slow grey puff
+export const ember = (x, y, A) => add({ x, y, vx: (Math.random() - 0.5) * 8, vy: -10 - Math.random() * 10, g: -4, life: 0.9, max: 0.9, col: [A.l, A.m, A.d], z: 1, sz: 1, plus: false });
+export const smoke = (x, y, n = 4) => { for (let i = 0; i < n; i++) add({ x, y, vx: (Math.random() - 0.5) * 14, vy: -6 - Math.random() * 10, g: -3, life: 0.7, max: 0.7, col: ['#7f90c0', '#44527f', '#262d48'], z: 1, sz: 2, plus: false }); };
+export const tintFlash = (col, life = 0.14) => fx.tints.push({ col, t: 0, life });
 export const flash = (x, y, r, life) => fx.flashes.push({ x, y, r, t: 0, life });
 export const hitstop = s => { fx.hit = Math.max(fx.hit, s); };
 export const shake = a => { if (fx.on.shake) fx.shakeAmp = Math.max(fx.shakeAmp, Math.min(a, 4)); };
@@ -40,6 +45,8 @@ export function update(dt) {
   for (const f of fx.floats) { f.t += dt; f.y -= dt * 12; }
   fx.floats = fx.floats.filter(f => f.t < 0.9);
   for (const r of fx.rings) r.t += dt;
+  for (const t of fx.tints) t.t += dt;
+  fx.tints = fx.tints.filter(t => t.t < t.life);
   fx.rings = fx.rings.filter(r => r.t < r.life);
   for (const f of fx.flashes) f.t += dt;
   fx.flashes = fx.flashes.filter(f => f.t < f.life);
@@ -60,12 +67,13 @@ export function drawLayer(c, z) {
   for (const p of fx.parts) {
     if (p.z !== z) continue;
     if (p.life < p.max * 0.25 && ((p.life * 40) | 0) % 2) continue; // fade by blinking
-    rect(c, p.x, p.y, 1, 1, p.col);
+    const col = Array.isArray(p.col) ? p.col[Math.min(p.col.length - 1, ((1 - p.life / p.max) * p.col.length) | 0)] : p.col;
+    if (p.plus) { rect(c, p.x - 1, p.y, 3, 1, col); rect(c, p.x, p.y - 1, 1, 3, col); } else rect(c, p.x, p.y, p.sz || 1, p.sz || 1, col);
   }
   for (const r of fx.rings) {
     if (r.z !== z) continue;
     const k = r.t / r.life, rr = r.r * (1 - (1 - k) * (1 - k));
-    c.fillStyle = k > 0.6 ? '#7f90c0' : r.col === 'w' ? '#f2f5ff' : '#cfd7f0';
+    c.fillStyle = k > 0.6 ? (C[r.col2] || r.col2) : (C[r.col] || r.col);
     const n = Math.max(10, Math.round(rr * 5));
     for (let i = 0; i < n; i++) { const a = i / n * 6.283; c.fillRect(Math.round(r.x + Math.cos(a) * rr), Math.round(r.y + Math.sin(a) * rr * 0.75), 1, 1); }
   }
@@ -102,4 +110,18 @@ export function overlays() {
   }
   OV = { vig, red: dither(5, '#7c2433'), dark: dither(13, '#0a0c12'), floor: dither(3, '#161a29') };
   return OV;
+}
+
+// Board-wide dither tint (skill flash). Cached per color/level; two densities fade it out.
+const TINTS = {};
+export function drawTint(c) {
+  for (const t of fx.tints) {
+    const lv = t.t < t.life * 0.5 ? 3 : 1, key = t.col + lv;
+    if (!TINTS[key]) {
+      const cv = mk(160, 160), g = cv.getContext('2d'); g.fillStyle = t.col;
+      for (let y = 0; y < 160; y++) for (let x = 0; x < 160; x++) if (BAYER[(y & 3) * 4 + (x & 3)] < lv) g.fillRect(x, y, 1, 1);
+      TINTS[key] = cv;
+    }
+    c.drawImage(TINTS[key], BX, BY);
+  }
 }

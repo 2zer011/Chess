@@ -1,10 +1,10 @@
-import { W, TILE, BX, BY } from '../art/palette.js';
+import { W, TILE, BX, BY, accOf } from '../art/palette.js';
 import { text, wrap } from '../art/font.js';
 import { rect, panel, ditherRect, hash } from '../gfx/pixel.js';
-import { drawBoard, drawThreat, drawShadow, moveDot, bracket, checkFrame } from '../gfx/board.js';
+import { drawBoard, drawThreat, drawShadow, drawGlow, moveDot, bracket, checkFrame } from '../gfx/board.js';
 import { drawChar, drawEnemy, overlayEnemy, icon, snapshot, pixelsOf, ghostsOf } from '../gfx/sprites.js';
 import * as F from '../gfx/fx.js';
-import { newGame, move, ability, choose, abilityTargets, threats, attackers, moves } from '../game.js';
+import { newGame, move, ability, choose, abilityTargets, threats, attackers, moves, cdOf } from '../game.js';
 import { Director } from '../anim/director.js';
 import { build } from '../anim/steps.js';
 import { PIECES } from '../pieces.js';
@@ -14,19 +14,20 @@ import { app, finishRun } from '../app.js';
 import { bg } from './common.js';
 
 let S, D, NOW = 0;
-const fresh = () => ({ aim: false, pause: false, buffT: 0, over: 0, done: false, red: 0, glitch: 0, cursor: null });
+const fresh = () => ({ aim: -1, info: 0, ember: 0, pause: false, buffT: 0, over: 0, done: false, red: 0, glitch: 0, cursor: null });
 const cx = tx => BX + tx * TILE + 10, cy = ty => BY + ty * TILE + 10;
 const pixelCache = {};
 
 // Visual adapter: the sequencer only talks to this, so it stays testable without a canvas.
 const V = {
+  tint: F.tintFlash, ember: (x, y) => F.ember(x, y, D.acc), smoke: F.smoke,
   burst: F.burst, spark: F.spark, ring: F.ring, flash: F.flash, shake: F.shake, hitstop: F.hitstop, float: F.floatText,
   redFlash: s => { S.red = s; },
   screenGlitch: s => { S.glitch = s; },
   dust(a) { F.ring(a.cx, a.py + 17, 8, 0.22, '4', 0); F.burst(a.cx, a.py + 17, 6, ['3', '4'], { spd: 22, life: 0.3, g: 0, z: 0 }); },
   trail(a) { // short pixel afterimage: stamp a ghost every few px of travel
-    if (!a.trail.length && !a.ghost) a.ghost = ghostsOf(snapshot(a.kind, a.isPlayer, NOW, a.flip));
-    if (!a.trail.length) a.ghost = ghostsOf(snapshot(a.kind, a.isPlayer, NOW, a.flip));
+    if (!a.trail.length && !a.ghost) a.ghost = ghostsOf(snapshot(a.kind, a.isPlayer, NOW, a.flip), a.isPlayer ? accOf(a.kind) : null);
+    if (!a.trail.length) a.ghost = ghostsOf(snapshot(a.kind, a.isPlayer, NOW, a.flip), a.isPlayer ? accOf(a.kind) : null);
     const l = a.trail[a.trail.length - 1];
     if (!l || Math.hypot(a.px - l.x, a.py - l.y) >= 4) a.trail.push({ x: a.px, y: a.py, age: 0 });
   },
@@ -69,13 +70,14 @@ export default {
     D.update(dt);
     if (D.idle) D.sync(g);
     S.red = Math.max(0, S.red - dt); S.glitch = Math.max(0, S.glitch - dt);
+    if (D.idle && g.phase === 'play' && !D.player.hidden && (S.ember -= dt) < 0) { S.ember = 0.22; F.ember(D.player.cx + (Math.random() - 0.5) * 8, D.player.py + 15, D.acc); } // ambient embers
     if (S.cursor) { S.cursor.t += dt; if (S.cursor.t > 0.3) S.cursor = null; }
     if (g.phase === 'buff' && D.idle) S.buffT += dt;
     if (g.phase === 'over' && D.idle) { S.over += dt; if (S.over > 2) finish(g, true); }
   },
   draw(c, t) {
     NOW = t;
-    const g = app.g, p = g.p, def = PIECES[g.piece];
+    const g = app.g, p = g.p, def = PIECES[g.piece], A = accOf(g.piece);
     const ready = D.idle && g.phase === 'play' && !S.pause && S.over === 0; // board accepts input only when fully settled
     bg(c);
     c.save(); c.translate(F.fx.ox, F.fx.oy);          // shake moves the board layer only, never the UI
@@ -84,31 +86,40 @@ export default {
     if (D.idle) {
       const seen = new Set();
       for (const s of threats(g)) { const k = s.x + ',' + s.y; if (!seen.has(k)) { seen.add(k); drawThreat(c, s.x, s.y); } }
-      if (ready) tg = S.aim ? abilityTargets(g) : moves(g);
-      for (const s of tg) if (!g.at(s.x, s.y)) moveDot(c, s.x, s.y);
+      if (ready) { tg = S.aim >= 0 ? abilityTargets(g, S.aim) : moves(g); drawGlow(c, p.x, p.y, A, t); }
+      for (const s of tg) if (!g.at(s.x, s.y)) moveDot(c, s.x, s.y, A.l);
       atk = attackers(g); check = atk.length > 0 && g.phase !== 'over';
       if (check) checkFrame(c, t);
     }
     F.drawLayer(c, 0);                                 // ground effects sit under the pieces
     for (const a of [...D.actors].sort((x, y) => (x.ty - y.ty) || (x.isPlayer ? 1 : -1))) drawActor(c, a, t, g);
     for (const e of D.effects) e.draw(c, e.t);
-    for (const s of tg) if (g.at(s.x, s.y)) bracket(c, s.x, s.y, S.aim ? '5' : 'R', ((t * 5) | 0) % 2);
+    for (const s of tg) if (g.at(s.x, s.y)) bracket(c, s.x, s.y, S.aim >= 0 ? A.l : 'R', ((t * 5) | 0) % 2);
     for (const e of atk) bracket(c, e.x, e.y, 'R', 0);
-    if (ready) bracket(c, p.x, p.y, '5', 1 + (((t * 3) | 0) % 2));
+    if (ready) bracket(c, p.x, p.y, A.l, 1 + (((t * 3) | 0) % 2));
     if (S.cursor) bracket(c, S.cursor.tx, S.cursor.ty, '4', 2);
     F.drawLayer(c, 1);
+    F.drawTint(c);
     if (S.glitch > 0) for (let i = 0; i < 6; i++) { const y = BY + Math.floor(Math.random() * 150); c.drawImage(c.canvas, 0, y, W, 6, Math.round((Math.random() - 0.5) * 10), y, W, 6); }
     if (S.red > 0) c.drawImage(F.overlays().red, 0, 0);
     c.restore();
 
     hud(c, g, t);
-    const msg = S.aim ? 'PICK A TARGET' : !D.idle ? (D.stepName.startsWith('enemy') ? 'ENEMY TURN' : '') : check ? 'CHECK!' : g.phase === 'over' ? '' : 'YOUR MOVE';
-    text(c, msg, W / 2, 213, check && !S.aim ? 'R' : '5', { align: 'c' });
-    wrap(def.ability.desc, 160).slice(0, 3).forEach((l, i) => text(c, l, W / 2, 224 + i * 8, '3', { align: 'c' }));
-    if (btn(c, def.ability.name, 8, 252, 160, 26, { disabled: !ready || p.cd > 0, sel: S.aim,
-      draw: (cc, x, y, w) => text(cc, p.cd ? 'CD ' + p.cd : 'READY', x + w - 6, y + 10, '3', { align: 'r' }) })) {
-      if (def.ability.target === 'none') ability(g); else S.aim = !S.aim;
-    }
+    const msg = S.aim >= 0 ? 'PICK A TARGET' : !D.idle ? (D.stepName.startsWith('enemy') ? 'ENEMY TURN' : '') : check ? 'CHECK!' : g.phase === 'over' ? '' : 'YOUR MOVE';
+    text(c, msg, W / 2, 213, check && S.aim < 0 ? 'R' : '5', { align: 'c' });
+    wrap(def.abilities[S.info].desc, 160).slice(0, 3).forEach((l, i) => text(c, l, W / 2, 224 + i * 8, '3', { align: 'c' }));
+    def.abilities.forEach((ab, slot) => {
+      const cd = cdOf(g, slot);
+      if (btn(c, '', 8 + slot * 82, 252, 78, 26, { disabled: !ready || cd > 0, sel: S.aim === slot,
+        draw: (cc, x, y) => {
+          rect(cc, x + 2, y + 3, 1, 20, cd ? '3' : A.m);
+          text(cc, ab.name, x + 6, y + 5, cd ? '3' : A.l);
+          text(cc, cd ? 'CD ' + cd : 'READY', x + 6, y + 15, cd ? '3' : '4');
+        } })) {
+        S.info = slot;
+        if (ab.target === 'none') ability(g, 0, 0, slot); else S.aim = S.aim === slot ? -1 : slot;
+      }
+    });
     if (ready) boardTap(g);
 
     if (S.over > 0.3) checkmate(c);
@@ -140,9 +151,9 @@ function drawActor(c, a, t, g) {
 
 function hud(c, g, t) {
   const d = D.disp;
-  panel(c, 6, 5, 24, 24, { fill: '1' });
+  panel(c, 6, 5, 24, 24, { fill: '1', hi: accOf(g.piece).m });
   drawChar(c, g.piece, 8, 7, t, { still: true });
-  text(c, PIECES[g.piece].name, 34, 7, '5', { shadow: '0' });
+  text(c, PIECES[g.piece].name, 34, 7, accOf(g.piece).l, { shadow: '0' });
   for (let i = 0; i < d.maxHp; i++) icon(c, i < d.hp ? 'heart' : 'heartE', 34 + i * 9, 16);
   for (let i = 0; i < d.shield; i++) icon(c, 'shield', 34 + d.maxHp * 9 + 3 + i * 9, 15);
   text(c, `WAVE ${d.wave}`, 34, 25, '4'); text(c, `KILLS ${d.kills}`, 84, 25, '3');
@@ -154,8 +165,8 @@ function boardTap(g) {
   if (!pt) return;
   const tx = Math.floor((pt.x - BX) / TILE), ty = Math.floor((pt.y - BY) / TILE);
   S.cursor = { tx, ty, t: 0 };
-  if (S.aim) ability(g, tx, ty); else move(g, tx, ty);
-  S.aim = false;
+  if (S.aim >= 0) ability(g, tx, ty, S.aim); else move(g, tx, ty);
+  S.aim = -1;
 }
 
 function checkmate(c) {

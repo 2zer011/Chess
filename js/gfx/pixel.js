@@ -26,7 +26,9 @@ export function parseAscii(rows, mirror) {
 }
 
 // Grid -> canvas, with an automatic 1px black outline.
-export function bake(grid, outline = true) {
+// acc: optional accent ramp, maps sprite chars a/b/c -> dark/mid/light
+export function bake(grid, outline = true, acc = null) {
+  const AM = acc ? { a: acc.d, b: acc.m, c: acc.l } : {};
   const w = grid[0].length, h = grid.length, p = outline ? 1 : 0;
   const cv = mk(w + 2 * p, h + 2 * p), c = cv.getContext('2d');
   const at = (x, y) => (grid[y] && grid[y][x]) || '.';
@@ -37,7 +39,7 @@ export function bake(grid, outline = true) {
   }
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const ch = at(x, y);
-    if (ch !== '.') px(c, x + p, y + p, ch === 'i' ? '1' : ch);
+    if (ch !== '.') px(c, x + p, y + p, AM[ch] || (ch === 'i' ? '1' : ch));
   }
   return cv;
 }

@@ -18,13 +18,16 @@ const landing = (D, A, dur = 0.08) => ph('landing', dur, {
   tick(p) { const e = easeOutBack(p); A.sx = lerp(1.1, 1, e); A.sy = lerp(0.8, 1, e); },
 });
 
-// Flash + hit-stop + particles + (limited) shake at the moment of contact.
+// Flash + tint + hit-stop + particles + (limited) shake at the moment of contact, in the piece's accent color.
 function impactFx(D, x, y, o = {}) {
-  const V = D.v, crit = o.crit;
+  const V = D.v, crit = o.crit, A = D.acc;
   V.flash(x, y, crit ? 11 : o.r || 8, crit ? 0.1 : 0.08);
+  V.tint(A.m, crit ? 0.18 : 0.12);
   V.hitstop(crit ? 0.1 : o.hit ?? 0.05);
-  V.burst(x, y, crit ? 28 : 12, ['5', '4', 'w'], { spd: crit ? 85 : 55 });
-  V.ring(x, y, crit ? 26 : o.ring || 16, 0.22, 'w', 0);
+  V.burst(x, y, crit ? 30 : 14, [A.l, A.m, '#f2f5ff'], { spd: crit ? 90 : 60 });
+  V.burst(x, y, crit ? 14 : 7, [A.l, A.m, A.d], { spd: 40, life: 0.7, g: 30, ramp: true, plus: true });
+  V.ring(x, y, crit ? 26 : o.ring || 16, 0.24, A.l, 0, A.m);
+  V.ring(x, y, (crit ? 26 : o.ring || 16) * 0.6, 0.18, '#f2f5ff', 0, A.l);
   const sh = crit ? 4 : o.shake ?? (o.heavy ? 2 : 0);
   if (sh) V.shake(sh);
   if (crit) V.float(x, y - 14, 'CRITICAL!', 'R');
@@ -174,8 +177,8 @@ function abilityStep(D, ev, body, end) {
   const victims = kills.map(k => D.actorOf(k.e)), deb = debuffs.map(d => ({ a: D.actorOf(d.e), kind: d.kind }));
   const mover = end.moved.map(m => ({ a: D.actorOf(m.e), x: m.x, y: m.y }));
   const crit = kills.length >= 3 || kills.some(k => CRIT(k.kind));
-  const c = { P, ev, end, victims, mover, deb, crit, T: (mover[0] || deb[0] || {}).a, k: -1 };
-  const plan = PLAN[D.piece](D, c);
+  const c = { P, ev, end, victims, mover, deb, crit, T: (mover[0] || deb[0] || {}).a, V0: victims[0], k: -1 };
+  const plan = (ev.slot ? PLAN2 : PLAN)[D.piece](D, c);
   const react = victims.length ? 0.38 : deb.length ? 0.3 : plan.reactDur || 0.12;
   let s0 = null;
   return step('ability', [P, ...victims, ...deb.map(d => d.a), ...mover.map(m => m.a)], [
@@ -187,7 +190,11 @@ function abilityStep(D, ev, body, end) {
       tick(p) { if (victims.length) killTick(D, victims, p); plan.react?.tick?.(p); },
       exit() { if (kills.length) D.disp.kills = Math.max(D.disp.kills, kills.at(-1).kills); },
     }),
-    ph('recovery', 0.09, { enter() { s0 = { sx: P.sx, sy: P.sy }; }, tick(p) { const e = easeOutBack(p); P.sx = lerp(s0.sx, 1, e); P.sy = lerp(s0.sy, 1, e); } }),
+    ph('recovery', 0.09, {
+      enter() { s0 = { sx: P.sx, sy: P.sy }; },
+      tick(p) { const e = easeOutBack(p); P.sx = lerp(s0.sx, 1, e); P.sy = lerp(s0.sy, 1, e); },
+      exit() { Object.assign(D.disp, { hp: end.hp, maxHp: end.maxHp, shield: end.shield }); }, // heals / shields show when the skill lands
+    }),
   ]);
 }
 
@@ -199,11 +206,17 @@ const charge = (D, c, p, r, col, n = 10) => {
   D.v.spark(c.P.cx + Math.cos(a) * r, c.P.cy + Math.sin(a) * r, -Math.cos(a) * r * 3.5, -Math.sin(a) * r * 3.5, col, 0.27);
 };
 const here = c => () => [c.P.cx, c.P.cy];
+const beam = (D, ax, ay, bx, by, n = 22) => { // line of fading sparkles from a to b
+  const A = D.acc;
+  for (let i = 0; i <= n; i++) { const k = i / n; D.v.spark(lerp(ax, bx, k), lerp(ay, by, k) + (rnd() - 0.5) * 2, 0, (rnd() - 0.5) * 12, ['#f2f5ff', A.l, A.m, A.d], 0.2 + rnd() * 0.15); }
+};
+// glow ring + inward sparks, shared by most charge-ups
+const aura = (D, c, p, sx, sy, r = 22) => { squash(c.P, sx, sy, p); charge(D, c, p, r, p < 0.5 ? D.acc.m : D.acc.l); if (p > 0.6 && ((p * 20) | 0) % 3 === 0) D.v.ember(c.P.cx + (rnd() - 0.5) * 8, c.P.py + 14); };
 
 const PLAN = {
   void: (D, c) => ({
-    antic: { dur: 0.22, tick(p) { squash(c.P, 1.1, 0.78, p); charge(D, c, p, 24, '4'); } },
-    action: { dur: 0.16, tick(p) { c.P.ab = p; c.P.sx = lerp(1.1, 0.9, p); c.P.sy = lerp(0.78, 1.15, easeOut(p)); } },
+    antic: { dur: 0.22, tick(p) { aura(D, c, p, 1.1, 0.78); } },
+    action: { dur: 0.16, enter() { D.v.ring(c.P.cx, c.P.cy, 34, 0.3, D.acc.l, 0, D.acc.m); }, tick(p) { c.P.ab = p; c.P.sx = lerp(1.1, 0.9, p); c.P.sy = lerp(0.78, 1.15, easeOut(p)); } },
     at: here(c), impact: { r: 12, ring: 30, shake: 2.5 },
   }),
   error: (D, c) => {
@@ -225,20 +238,20 @@ const PLAN = {
     };
   },
   time: (D, c) => ({
-    antic: { dur: 0.2, tick(p) { squash(c.P, 1.06, 0.88, p); charge(D, c, p, 20, '5', 12); } },
-    action: { dur: 0.3, tick(p) { c.P.ab = p; } },
+    antic: { dur: 0.2, tick(p) { aura(D, c, p, 1.06, 0.88, 20); } },
+    action: { dur: 0.3, enter() { D.v.ring(c.P.cx, c.P.cy, 40, 0.35, D.acc.l, 0, D.acc.m); }, tick(p) { c.P.ab = p; } },
     at: here(c), impact: { r: 10, ring: 34, shake: 0, hit: 0.04 }, reactDur: 0.25,
-    react: { enter() { D.actors.forEach(a => { if (!a.isPlayer) { a.frost = true; D.v.burst(a.cx, a.cy, 4, ['4', '5'], { spd: 20, g: 0 }); } }); } },
+    react: { enter() { D.actors.forEach(a => { if (!a.isPlayer) { a.frost = true; D.v.burst(a.cx, a.cy, 5, [D.acc.l, D.acc.m], { spd: 22, g: 0, plus: true }); } }); } },
   }),
   space: (D, c) => {
     const warp = () => { if (c.swapped) return; c.swapped = true; c.P.tx = c.end.px; c.P.ty = c.end.py; D.v.gather(c.P, 0.22); };
     return {
-      antic: { dur: 0.15, tick(p) { squash(c.P, 1.05, 0.9, p); charge(D, c, p, 18, '5', 8); } },
+      antic: { dur: 0.15, tick(p) { aura(D, c, p, 1.05, 0.9, 18); } },
       action: {
         dur: 0.5,
-        enter() { D.v.scatter(c.P); c.P.hidden = true; },
+        enter() { D.v.scatter(c.P); c.P.hidden = true; D.v.ring(c.P.cx, c.P.cy, 22, 0.25, D.acc.l, 0, D.acc.m); },
         tick(p) { if (p >= 0.45) warp(); },
-        exit() { warp(); c.P.hidden = false; D.v.dust(c.P); },
+        exit() { warp(); c.P.hidden = false; D.v.dust(c.P); D.v.ring(c.P.cx, c.P.cy, 26, 0.3, D.acc.l, 0, D.acc.m); },
       },
       at: here(c), impact: { r: 10, ring: 26, shake: 1 },
     };
@@ -247,12 +260,12 @@ const PLAN = {
     antic: {
       dur: 0.25, tick(p) {
         squash(c.P, 1.04, 0.85, p);
-        const k = (p * 12) | 0; if (k !== c.k) { c.k = k; const a = rnd() * 6.283; D.v.spark(c.P.cx + Math.cos(a) * 60, c.P.cy + Math.sin(a) * 60, -Math.cos(a) * 160, -Math.sin(a) * 160, '4', 0.35); }
+        const k = (p * 12) | 0; if (k !== c.k) { c.k = k; const a = rnd() * 6.283; D.v.spark(c.P.cx + Math.cos(a) * 60, c.P.cy + Math.sin(a) * 60, -Math.cos(a) * 160, -Math.sin(a) * 160, [D.acc.l, D.acc.m, D.acc.d], 0.35); }
       },
     },
     action: {
       dur: 0.38,
-      enter() { c.mover.forEach(m => { m.sx = m.a.tx; m.sy = m.a.ty; }); },
+      enter() { c.mover.forEach(m => { m.sx = m.a.tx; m.sy = m.a.ty; }); D.v.ring(c.P.cx, c.P.cy, 50, 0.4, D.acc.m, 0, D.acc.d); },
       tick(p) { c.P.ab = p; const e = easeIn(p); c.mover.forEach(m => { m.a.tx = lerp(m.sx, m.x, e); m.a.ty = lerp(m.sy, m.y, e); }); },
       exit() { c.mover.forEach(m => { m.a.tx = m.x; m.a.ty = m.y; }); },
     },
@@ -261,17 +274,96 @@ const PLAN = {
   parasite: (D, c) => {
     let from = null;
     return {
-      antic: { dur: 0.2, tick(p) { squash(c.P, 1.18, 0.78, p); charge(D, c, p, 10, 'R', 8); } },
+      antic: { dur: 0.2, tick(p) { aura(D, c, p, 1.18, 0.78, 12); } },
       action: {
         dur: 0.3,
         enter() { from = [c.P.cx, c.P.cy]; },
         tick(p) {
           if (!c.T) return;
           const e = easeInOut(p), x = lerp(from[0], c.T.cx, e), y = lerp(from[1], c.T.cy, e) - Math.round(pulse(p) * 8);
-          D.v.spark(x, y, 0, 0, 'R', 0.12); D.v.spark(x + 1, y, 0, 0, 'r', 0.1);
+          D.v.spark(x, y, 0, 0, [D.acc.l, D.acc.m], 0.2); D.v.spark(x + 1, y, 0, 0, [D.acc.m, D.acc.d], 0.16);
         },
       },
       at: () => (c.T ? [c.T.cx, c.T.cy] : [c.P.cx, c.P.cy]), impact: { r: 8, ring: 14, shake: 0, hit: 0.04 },
     };
   },
+  // SHOTGUN: cock the gun, recoil blast, pellet cone, smoke
+  blackking: (D, c) => {
+    const dx = Math.sign(c.ev.x - c.ev.fx), dy = Math.sign(c.ev.y - c.ev.fy), base = Math.atan2(dy, dx), A = D.acc;
+    return {
+      antic: { dur: 0.2, enter() { if (dx) c.P.flip = dx < 0; }, tick(p) { squash(c.P, 1.12, 0.84, p); c.P.lean = -dx * Math.round(p * 2); c.P.ox = -dx * Math.round(p * 2); c.P.oy = -dy * Math.round(p * 2); } },
+      action: {
+        dur: 0.12,
+        enter() {
+          const mx = c.P.cx + dx * 10, my = c.P.cy + dy * 10;
+          D.v.flash(mx, my, 6, 0.07); D.v.smoke(mx, my, 6);
+          for (let i = 0; i < 34; i++) { const a = base + (rnd() - 0.5) * 1.3, s = 150 + rnd() * 120; D.v.spark(mx, my, Math.cos(a) * s, Math.sin(a) * s, ['#f2f5ff', A.l, A.m, A.d], 0.2 + rnd() * 0.12); }
+          D.v.shake(3);
+        },
+        tick(p) { const k = 1 - p; c.P.ox = -dx * Math.round(4 * k); c.P.oy = -dy * Math.round(4 * k); c.P.sx = lerp(0.9, 1, p); c.P.sy = lerp(1.1, 1, p); },
+      },
+      at: () => [c.P.cx + dx * 22, c.P.cy + dy * 22], impact: { r: 9, ring: 24, shake: 0, hit: 0.07 },
+    };
+  },
+};
+
+// ---- second skills ----
+const PLAN2 = {
+  void: (D, c) => ({ // DEVOUR: lunge, drain stream flows into the caster
+    antic: { dur: 0.15, tick(p) { aura(D, c, p, 1.1, 0.82, 14); } },
+    action: {
+      dur: 0.25,
+      tick(p) {
+        const T = c.V0; if (!T) return;
+        for (let i = 0; i < 2; i++) D.v.spark(T.cx + (rnd() - 0.5) * 8, T.cy + (rnd() - 0.5) * 8, (c.P.cx - T.cx) / 0.25, (c.P.cy - T.cy) / 0.25, [D.acc.l, D.acc.m, D.acc.d], 0.25);
+        c.P.sy = lerp(0.9, 1.08, pulse(p));
+      },
+    },
+    at: () => (c.V0 ? [c.V0.cx, c.V0.cy] : [c.P.cx, c.P.cy]), impact: { r: 9, ring: 16, shake: 1, hit: 0.05 },
+    react: { enter() { D.v.float(c.P.cx, c.P.py - 4, '+1', D.acc.l); D.v.burst(c.P.cx, c.P.cy, 8, [D.acc.l, D.acc.m], { spd: 20, g: -20, plus: true }); } },
+  }),
+  error: (D, c) => ({ // OVERFLOW: glitch beams along row + column
+    antic: { dur: 0.18, enter() { c.P.glitch = 0.4; D.v.screenGlitch(0.3); }, tick(p) { squash(c.P, 1.08, 0.9, p); c.P.ox = Math.round((rnd() - 0.5) * 2); } },
+    action: {
+      dur: 0.3,
+      tick(p) {
+        c.P.ox = 0; c.P.ab = p;
+        for (let i = 0; i < 4; i++) {
+          const s = (rnd() < 0.5 ? -1 : 1) * (110 + rnd() * 120), col = [D.acc.l, D.acc.m, D.acc.d];
+          D.v.spark(c.P.cx, c.P.cy, s, 0, col, 0.25); D.v.spark(c.P.cx, c.P.cy, 0, s, col, 0.25);
+        }
+      },
+    },
+    at: here(c), impact: { r: 10, ring: 40, shake: 1 },
+  }),
+  time: (D, c) => ({ // TIME LOCK: double clock ring locks everything nearby
+    antic: { dur: 0.2, tick(p) { aura(D, c, p, 1.06, 0.88, 20); } },
+    action: { dur: 0.3, enter() { D.v.ring(c.P.cx, c.P.cy, 44, 0.4, D.acc.l, 0, D.acc.m); D.v.ring(c.P.cx, c.P.cy, 30, 0.3, '#f2f5ff', 0, D.acc.l); }, tick(p) { c.P.ab = p; } },
+    at: here(c), impact: { r: 11, ring: 46, shake: 0, hit: 0.05 },
+  }),
+  space: (D, c) => ({ // LANCE: aim, then a beam pierces the target
+    antic: { dur: 0.16, tick(p) { aura(D, c, p, 1.04, 0.92, 16); if (c.V0) c.P.lean = Math.sign(c.V0.cx - c.P.cx) * Math.round(p * 2); } },
+    action: { dur: 0.14, enter() { if (c.V0) { beam(D, c.P.cx, c.P.cy, c.V0.cx, c.V0.cy, 30); D.v.flash(c.P.cx, c.P.cy, 6, 0.06); } }, tick(p) { c.P.sx = lerp(0.92, 1, p); } },
+    at: () => (c.V0 ? [c.V0.cx, c.V0.cy] : [c.P.cx, c.P.cy]), impact: { r: 9, ring: 20, shake: 2, hit: 0.06 },
+  }),
+  blackhole: (D, c) => ({ // REPEL: implode, then a shockwave throws everyone outward
+    antic: { dur: 0.2, tick(p) { aura(D, c, p, 1.1, 0.8, 24); } },
+    action: {
+      dur: 0.3,
+      enter() { c.mover.forEach(m => { m.sx = m.a.tx; m.sy = m.a.ty; }); D.v.ring(c.P.cx, c.P.cy, 50, 0.35, D.acc.l, 0, D.acc.m); D.v.ring(c.P.cx, c.P.cy, 34, 0.28, '#f2f5ff', 0, D.acc.l); D.v.shake(2); },
+      tick(p) { c.P.ab = p; const e = easeOut(p); c.mover.forEach(m => { m.a.tx = lerp(m.sx, m.x, e); m.a.ty = lerp(m.sy, m.y, e); }); },
+      exit() { c.mover.forEach(m => { m.a.tx = m.x; m.a.ty = m.y; }); },
+    },
+    at: here(c), impact: { r: 10, ring: 36, shake: 2, hit: 0.05 },
+  }),
+  parasite: (D, c) => ({ // SPORES: rear up, burst a cloud of spores
+    antic: { dur: 0.2, tick(p) { aura(D, c, p, 1.18, 0.78, 12); } },
+    action: { dur: 0.3, enter() { D.v.burst(c.P.cx, c.P.cy - 4, 30, [D.acc.l, D.acc.m, D.acc.d], { spd: 55, life: 0.9, g: -22, ramp: true, sz: 2 }); D.v.ring(c.P.cx, c.P.cy, 30, 0.3, D.acc.m, 0, D.acc.d); }, tick(p) { c.P.ab = p; } },
+    at: here(c), impact: { r: 8, ring: 24, shake: 0, hit: 0.04 },
+  }),
+  blackking: (D, c) => ({ // GUARD: plate armor ring + shield sparks
+    antic: { dur: 0.15, tick(p) { aura(D, c, p, 1.08, 0.88, 14); } },
+    action: { dur: 0.35, enter() { D.v.buff(c.P); D.v.ring(c.P.cx, c.P.cy, 24, 0.3, D.acc.l, 0, D.acc.m); D.v.burst(c.P.cx, c.P.cy, 16, ['#cfd7f0', '#7f90c0', D.acc.l], { spd: 40, g: -10, plus: true }); }, tick(p) { c.P.ab = p; } },
+    at: here(c), impact: { r: 9, ring: 20, shake: 0, hit: 0.03 },
+  }),
 };
